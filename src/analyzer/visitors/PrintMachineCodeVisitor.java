@@ -211,6 +211,39 @@ public class PrintMachineCodeVisitor implements ParserVisitor
         }
     }
 
+    String getLargestNextUse(NextUse next)
+    {
+        int largestNextUse = 0;
+        String largestNextUseVariable = null;
+
+        for (Map.Entry<String, ArrayList<Integer>> entry : next.nextUse.entrySet())
+        {
+            if (entry.getValue().get(0) > largestNextUse)
+            {
+                if (!this.REGISTERS.contains(entry.getKey()))
+                    continue;
+
+                largestNextUse = entry.getValue().get(0);
+                largestNextUseVariable = entry.getKey();
+            }
+        }
+
+        return largestNextUseVariable;
+    }
+
+    String getDeadVariable(Set<String> life)
+    {
+        for (String var : this.REGISTERS)
+        {
+            if (!life.contains(var))
+            {
+                return var;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * This function should generate the LD and ST when needed.
      */
@@ -222,7 +255,61 @@ public class PrintMachineCodeVisitor implements ParserVisitor
         // TODO (ex4): if REGISTERS has max size:
         // - put variable in space of an other variable which is not used anymore
         // *or*
-        // - put variable in space of variable which as the largest next-use
+        // - put variable in space of variable which has the largest next-use
+
+        if (!loadIfNotFound)
+        {
+            this.MODIFIED.add(variable);
+        }
+
+        if (variable.startsWith("#"))
+        {
+            return variable;
+        }
+
+        if (this.REGISTERS.contains(variable))
+        {
+            return "R" + Integer.toString(this.REGISTERS.indexOf(variable));
+        }
+
+        if (this.REGISTERS.size() < this.MAX_REGISTERS_COUNT)
+        {
+            if (loadIfNotFound)
+            {
+                m_writer.println("LD " + "R" + Integer.toString(this.REGISTERS.size()) + ", " + variable);
+            }
+            this.REGISTERS.add(variable);
+            return "R" + Integer.toString(this.REGISTERS.size() - 1);
+        }
+
+        // Registers are full...
+
+        Set<String> variablesThatNeedToBeUsedLater = next.nextUse.keySet();
+
+        String variableToReplace = getDeadVariable(variablesThatNeedToBeUsedLater);
+
+        if (variableToReplace == null)
+            variableToReplace = getLargestNextUse(next);
+
+        if (variableToReplace != null)
+        {
+
+            int variableToReplaceIndex = this.REGISTERS.indexOf(variableToReplace);
+
+            // Check if variable to replace has been modified
+            if (this.MODIFIED.contains(variableToReplace) && life.contains(variableToReplace))
+            {
+                m_writer.println("ST " + variableToReplace + ", " + "R" + variableToReplaceIndex);
+
+                this.MODIFIED.remove(variableToReplace);
+            }
+
+            this.REGISTERS.set(variableToReplaceIndex, variable);
+            if (loadIfNotFound)
+                m_writer.println("LD " + "R" + variableToReplaceIndex + ", " + variable);
+
+            return "R" + Integer.toString(variableToReplaceIndex);
+        }
 
         return null;
     }
@@ -237,8 +324,37 @@ public class PrintMachineCodeVisitor implements ParserVisitor
         for (int i = 0; i < CODE.size(); i++)
         {
             m_writer.println("// Step " + i);
+
+            MachineCodeLine currentNode = this.CODE.get(i);
+            String op = currentNode.OPERATION;
+            String assign = currentNode.ASSIGN;
+            String left = currentNode.LEFT;
+            String right = currentNode.RIGHT;
+
+
+            String leftRegister = chooseRegister(left, currentNode.Life_IN, currentNode.Next_IN, true);
+            String rightRegister = chooseRegister(right, currentNode.Life_IN, currentNode.Next_IN, true);
+
+            String assignRegister = chooseRegister(assign, currentNode.Life_OUT, currentNode.Next_OUT, false);
+
+            if (op != null)
+                m_writer.println(op + " " + assignRegister + ", " + leftRegister + ", " + rightRegister);
+
             m_writer.println(CODE.get(i));
         }
+
+        ArrayList<String> temp = (ArrayList<String>) this.RETURNS.clone();
+        for (int i = this.CODE.size() - 1; i >= 0; i--)
+        {
+            for (String key : this.CODE.get(i).DEF)
+            {
+                if (temp.contains(key) && !this.CODE.get(i).Next_OUT.nextUse.containsKey(key) && this.MODIFIED.contains(key))
+                {
+                    m_writer.println("ST " + key + ", R" + Integer.toString(this.REGISTERS.indexOf(key)));
+                }
+            }
+        }
+
     }
 
     /**
