@@ -177,14 +177,38 @@ public class PrintMachineCodeVisitor implements ParserVisitor
 
             currentNode.Life_IN = newSet;
         }
-
-
-        return;
     }
 
     private void computeNextUse()
     {
         // TODO (ex3): Implement next-use algorithm on the CODE array.
+        for (int i = CODE.size() - 1; i >= 0; i--)
+        {
+            MachineCodeLine currentNode = CODE.get(i);
+            if (i < (CODE.size() - 1))
+            {
+                currentNode.Next_OUT = CODE.get(i + 1).Next_IN;
+            }
+
+            for (Map.Entry<String, ArrayList<Integer>> entry : currentNode.Next_OUT.nextUse.entrySet())
+            {
+                String v = entry.getKey();
+                ArrayList<Integer> n = entry.getValue();
+
+                if (!currentNode.DEF.contains(v))
+                {
+                    for (Integer number : n)
+                    {
+                        currentNode.Next_IN.add(v, number);
+                    }
+                }
+            }
+
+            for (String ref : currentNode.REF)
+            {
+                currentNode.Next_IN.add(ref, i);
+            }
+        }
     }
 
     /**
