@@ -153,6 +153,33 @@ public class PrintMachineCodeVisitor implements ParserVisitor
     private void computeLifeVar()
     {
         // TODO (ex2): Implement life variables algorithm on the CODE array.
+
+        MachineCodeLine lastNode = CODE.get(CODE.size() - 1);
+
+        for (int i = 0; i < RETURNS.size(); i++)
+        {
+            lastNode.Life_OUT.add(RETURNS.get(i));
+        }
+
+        for (int i = CODE.size() - 1; i >= 0; i--)
+        {
+            MachineCodeLine currentNode = CODE.get(i);
+            if (i < (CODE.size() - 1))
+            {
+                currentNode.Life_OUT = CODE.get(i + 1).Life_IN;
+            }
+
+            HashSet<String> newSet = new HashSet<>(currentNode.Life_OUT);
+
+            newSet.removeAll(currentNode.DEF);
+            newSet.addAll(currentNode.REF);
+
+
+            currentNode.Life_IN = newSet;
+        }
+
+
+        return;
     }
 
     private void computeNextUse()
